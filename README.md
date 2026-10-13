@@ -450,21 +450,21 @@ Fix, part 1: build_graph_from_reads also adds the reverse complement of every re
 
 Fix, part 2: whenever eulerian_walk uses an edge, it also removes the twin edge on the other strand, revcomp(right) to revcomp(left), so the second strand is never assembled separately. Part 1 alone still gave 198% on a genome with repeats. With both parts, the simulated genome assembled at 100% and the yeast genome at 96.0%.
 
-What I learned: a check that depends on an exact match can fail without any error on real data. Testing on simulated data with a known answer caught a problem the toy example could not.
+What was learned: a check that depends on an exact match can fail without any error on real data. Testing on simulated data with a known answer caught a problem the toy example could not.
 
 ### False join splitting
 Problem: repeats create branches in the graph, and a group of nodes may then have no single path through every edge. The walk can place two nodes next to each other in the tour even though no edge connects them, which would produce sequence that does not exist in the genome.
 
 Fix: after reversing each tour, assemble_contigs checks every neighboring pair against the original graph and starts a new piece wherever the pair is not a real edge. This requires the walk to use a separate copy of the graph, made with ```list()``` so each node's list is copied, because the walk empties the copy and only the original can confirm which edges are real.
 
-What I learned: an algorithm can be correct in theory and still give wrong output when real data breaks its assumptions.
+What was learned: an algorithm can be correct in theory and still give wrong output when real data breaks its assumptions.
 
 ### Performance (list copying in the recursive walk)
 Problem: ```tour = tour + self.eulerian_walk(...)``` creates a new list on every recursive call, copying every node collected so far. Tested on long chains, the time grew about 5x each time the length doubled (20 seconds for 80,000 nodes), which would have taken hours on yeast walks millions of nodes deep.
 
 Fix: reuse the list returned by the inner call (```tour = sub_tour```) and use ```tour.extend(sub_tour)``` only at branch points. The 80,000-node chain dropped to 0.1 seconds, and the yeast assembly step took about 2 minutes. The walk is still recursive and gives the same result.
 
-What I learned: correct code can still be unusable at scale, and testing on data closer to the real size is necessary before a full run.
+What was learned: correct code can still be unusable at scale, and testing on data closer to the real size is necessary before a full run.
 
 # Personal Reflections
 ## Group Leader
