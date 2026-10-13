@@ -467,8 +467,12 @@ Fix: reuse the list returned by the inner call (```tour = sub_tour```) and use `
 What was learned: correct code can still be unusable at scale, and testing on data closer to the real size is necessary before a full run.
 
 # Personal Reflections
-## Group Leader
-Group leader's reflection on the project
+## Group Leader - Matthew (Jake)
+This was my first time as a project leader, and I found the process went pretty well. At first I struggled to figure out what files needed to be uploaded to github. I didn't want to add the data files as this seemed unecasary, and we ended up just keeping necasary files their (mainly README.md and project04.ipynb) and storing the data files locally. This seemed to work and is something I will continue to do moving forward. 
+
+In terms of implementation of the algorithm, due to conflicting schedules the group worked on the project in parallel. I struggled a lot with the basic structure of the algorithm. In praticular, I didnt understand that each read had to be split into multiple k lengthed kmers that were then turned into left and right k - 1mers. I was hung up on the fact that it intuitively seems like each read should stay together, and I was trying to make just two k - 1mers from each read. One resource that helped me a lot was the de Bruijn Graph slideshow (Langmead) posted in the reading section of this module. This slideshow showed me how to create the k-mers the right way and had a similar implmentation in code which I adapted to the specifics of this project.
+
+That being said, my implementation was much less succesful than the one seen in our Jupyter notebook. It could almost assemble the toy reads, though the assembly would be too short. This is because it would  follow the nodes to the end or reach a node without anymore edges, without taking every edge as required by a eulerian walk. I have been trying to use Ildiko's implementation to fix this, though I still can't figure it out.  I plan to continue working on this issue to try to reach a solution. Overall, I found this project to be the hardest one yet, but I enjoyed refreshing/learning object oriented programming and recursion.   
 
 ## Other member - Ildiko Polyak
 Marcus described last week's Gibbs sampling project as harder than this one, but I found graph algorithms CONSIDERABLY harder. It took me much longer to be clear on the entire process in order to write a sound pseudocode architecture for the functions. This project required recursion and object-oriented design, which I am still rather new to, and tracing calls that stack up and return in reverse order took several attempts to understand.
@@ -482,3 +486,7 @@ The group was cut in size from 3 to 2 members and we had conflicted schedules fo
 # Generative AI Appendix
 Anthropic Claude Opus 5.5 was used for this project and many specific details are described and documented in above sections.
 Pseudocode and original code was written idenpendently and original.  Claude was given the parts of the functions that were not working as anticipated and asked to explain in detail why and what the fix would be in the code.
+
+# Additional Resources
+
+Langmead, B. *De Bruijn Graph assembly* [PowerPoint slides]. Whiting School of Engineering, Johns Hopkins University. https://www.cs.jhu.edu/~langmea/resources/lecture_notes/17_assembly_dbg_v2.pdf
