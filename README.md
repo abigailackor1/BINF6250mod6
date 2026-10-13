@@ -436,25 +436,34 @@ All four problems described in Struggles appeared only at realistic data scale. 
 # Struggles
 The four struggles and fixes below were worked out with the help of Claude.
 
-## Recursion Limit
+### Recursion Limit
 Problem: Python allows 1,000 nested function calls by default, and the recursive walk makes one nested call per step along a contig. The yeast graph is long, unbranched chains, and the first walk reached 8,918,336 calls deep, far past both the default and the 1,000,000 limit first tried. A classmate recommended a much higher limit.
+
 Fix: sys.setrecursionlimit(50000000). A walk cannot be deeper than the total number of edges (~23 million), so a correct walk never reaches this limit, and it still stops a runaway recursion caused by a bug.
+
 What was learned: the recursion limit is a safeguard against runaway recursion, not a measure of what the computer can handle. Recursion depth depends on the shape of the data, which a 22-node toy example cannot show.
 
-## Both strands (reverse complement duplicates)
+### Both strands (reverse complement duplicates)
 Problem: reads come from both strands, so each region can be assembled twice, once as itself and once as its reverse complement. The first approach, skipping a contig if its exact reverse complement was already kept, gave 200% on a simulated genome. Coverage gaps on one strand split it into pieces that no longer exactly matched the other strand's contig.
+
 Fix, part 1: build_graph_from_reads also adds the reverse complement of every read, so both strands get full coverage.
+
 Fix, part 2: whenever eulerian_walk uses an edge, it also removes the twin edge on the other strand, revcomp(right) to revcomp(left), so the second strand is never assembled separately. Part 1 alone still gave 198% on a genome with repeats. With both parts, the simulated genome assembled at 100% and the yeast genome at 96.0%.
+
 What I learned: a check that depends on an exact match can fail without any error on real data. Testing on simulated data with a known answer caught a problem the toy example could not.
 
-## False join splitting
+### False join splitting
 Problem: repeats create branches in the graph, and a group of nodes may then have no single path through every edge. The walk can place two nodes next to each other in the tour even though no edge connects them, which would produce sequence that does not exist in the genome.
+
 Fix: after reversing each tour, assemble_contigs checks every neighboring pair against the original graph and starts a new piece wherever the pair is not a real edge. This requires the walk to use a separate copy of the graph, made with ```list()``` so each node's list is copied, because the walk empties the copy and only the original can confirm which edges are real.
+
 What I learned: an algorithm can be correct in theory and still give wrong output when real data breaks its assumptions.
 
-## Performance (list copying in the recursive walk)
+### Performance (list copying in the recursive walk)
 Problem: ```tour = tour + self.eulerian_walk(...)``` creates a new list on every recursive call, copying every node collected so far. Tested on long chains, the time grew about 5x each time the length doubled (20 seconds for 80,000 nodes), which would have taken hours on yeast walks millions of nodes deep.
+
 Fix: reuse the list returned by the inner call (```tour = sub_tour```) and use ```tour.extend(sub_tour)``` only at branch points. The 80,000-node chain dropped to 0.1 seconds, and the yeast assembly step took about 2 minutes. The walk is still recursive and gives the same result.
+
 What I learned: correct code can still be unusable at scale, and testing on data closer to the real size is necessary before a full run.
 
 # Personal Reflections
