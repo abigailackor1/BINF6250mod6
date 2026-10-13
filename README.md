@@ -1,7 +1,12 @@
 # Introduction
-Description of the project
+This project implements a De Bruijn graph genome assembler in a DeBruijnGraph class and uses it to assemble the Saccharomyces cerevisiae R64 genome from 2,414,266 simulated, error-free, 150 bp single-end reads at 30x coverage. Each read is broken into k-mers (k = 31), and each k-mer becomes a directed edge between its left and right (k−1)-mers. Contigs are assembled by recursive Eulerian walks through the graph, split wherever the walk joins nodes that are not connected, and converted back to DNA sequence. The class also calculates assembly statistics, including N50, and writes the contigs to a FASTA file.
+
+All required functionality described in the assignment instructions was completed. All eight methods of the DeBruijnGraph class were implemented, the toy example assembles its 9 reads into a single contig, and the yeast assembly runs to completion in about 8 minutes. The Eulerian walk is recursive, as the assignment requires. The optional mouse challenge was not attempted.
+
 
 # Pseudocode
+*Note: this is the original pseudocode, written before coding began. It does not reflect the changes made to the code during troubleshooting: raising the recursion limit, adding both DNA strands to the graph, removing twin edges during the walk, and reusing sub-tours instead of copying them in the recursive walk. These changes and the reasons for them are described in the Struggles section.  Original was kept as a way to see the differences in orginial concept and working program.*
+
 ```
 #Project04 Pseudocode
 
@@ -411,18 +416,60 @@ Key metrics:
   • Longest contig: 108,052 bp
   • Coverage: 30.0x
 
+# Evidence and Reasoning
+The toy example assembled its 9 overlapping reads into one contig, ATGGCGTACGTTACCATGGGCCTAAA. Before the yeast run, the code was tested on a simulated 300,000 bp genome with reads from both strands at 30x coverage, where it assembled 100.0% of the genome in a single contig.
+
+Claude was used to help identify areas where extra sanity-check print statements could be inserted into the code to confirm each stage of the yeast run was working as intended. The graph copy had the same number of nodes as the original (22,953,458), and the original graph still had all 22,961,448 edges after assembly, showing that the walk only modified the copy. The first walk reached 8,918,336 nodes, which confirmed that the raised recursion limit was necessary. The print statements were commented out once the code was confirmed working, and the results were identical with them on and off.
+
+The assembly totals 11,592,504 bp, or 96.0% of the 12,071,326 bp reference. Assemblies near 200% indicate that reverse-complement duplicates were not removed, so 96.0% shows that each region was assembled once. The missing ~4% is expected for this approach. Each distinct k-mer is stored as a single edge, so sequence that appears more than once in the genome, like transposable elements and ribosomal DNA repeats, are assembled only once. Each split at a false join also loses the one edge leading into the new piece, and pieces with only one node are not reported as contigs.
+
+Repeats can also cause misassembly. Where two regions share a repeat, the walk can follow real edges that join those regions in the wrong order, producing a contig in which each step is valid in the graph but the overall sequence does not match the genome. This is a known limitation of Eulerian-path assembly. Our testing did not include comparing the yeast contigs against the reference, so the number of misassembled contigs is unknown.
+
 # Successes
-Description of the team's learning points
+The assembler produced a correct result on the toy example and assembled 96.0% of the yeast genome in 3,844 contigs, with an N50 of 25,294 bp and a longest contig of 108,052 bp, in about 8 minutes. The walk is fully recursive, and all eight methods share one graph stored on the object, meeting the assignment's recursion and object-oriented requirements.
+
+Testing on a simulated genome with a known answer was the most useful step in the project. It found the reverse-complement duplication problem and the slow list concatenation in the walk before the full yeast run, neither of which the toy example could reveal. The sanity-check print statements, ideas over from past projects, made it possible to confirm the graph copy, the unchanged original graph, and the recursion depth on the real data.
+
+# Reflection and Adaptive Learning
+All four problems described in Struggles appeared only at realistic data scale. In future projects, it would be best to test on simulated data of realistic size, with a known answer, as soon as the code works on the toy example, and to estimate memory use and recursion depth from the data before a full run.
 
 # Struggles
-Description of the stumbling blocks the team experienced
+The four struggles and fixes below were worked out with the help of Claude.
+
+## Recursion Limit
+Problem: Python allows 1,000 nested function calls by default, and the recursive walk makes one nested call per step along a contig. The yeast graph is long, unbranched chains, and the first walk reached 8,918,336 calls deep, far past both the default and the 1,000,000 limit first tried. A classmate recommended a much higher limit.
+Fix: sys.setrecursionlimit(50000000). A walk cannot be deeper than the total number of edges (~23 million), so a correct walk never reaches this limit, and it still stops a runaway recursion caused by a bug.
+What was learned: the recursion limit is a safeguard against runaway recursion, not a measure of what the computer can handle. Recursion depth depends on the shape of the data, which a 22-node toy example cannot show.
+
+## Both strands (reverse complement duplicates)
+Problem: reads come from both strands, so each region can be assembled twice, once as itself and once as its reverse complement. The first approach, skipping a contig if its exact reverse complement was already kept, gave 200% on a simulated genome. Coverage gaps on one strand split it into pieces that no longer exactly matched the other strand's contig.
+Fix, part 1: build_graph_from_reads also adds the reverse complement of every read, so both strands get full coverage.
+Fix, part 2: whenever eulerian_walk uses an edge, it also removes the twin edge on the other strand, revcomp(right) to revcomp(left), so the second strand is never assembled separately. Part 1 alone still gave 198% on a genome with repeats. With both parts, the simulated genome assembled at 100% and the yeast genome at 96.0%.
+What I learned: a check that depends on an exact match can fail without any error on real data. Testing on simulated data with a known answer caught a problem the toy example could not.
+
+## False join splitting
+Problem: repeats create branches in the graph, and a group of nodes may then have no single path through every edge. The walk can place two nodes next to each other in the tour even though no edge connects them, which would produce sequence that does not exist in the genome.
+Fix: after reversing each tour, assemble_contigs checks every neighboring pair against the original graph and starts a new piece wherever the pair is not a real edge. This requires the walk to use a separate copy of the graph, made with ```list()``` so each node's list is copied, because the walk empties the copy and only the original can confirm which edges are real.
+What I learned: an algorithm can be correct in theory and still give wrong output when real data breaks its assumptions.
+
+## Performance (list copying in the recursive walk)
+Problem: ```tour = tour + self.eulerian_walk(...)``` creates a new list on every recursive call, copying every node collected so far. Tested on long chains, the time grew about 5x each time the length doubled (20 seconds for 80,000 nodes), which would have taken hours on yeast walks millions of nodes deep.
+Fix: reuse the list returned by the inner call (```tour = sub_tour```) and use ```tour.extend(sub_tour)``` only at branch points. The 80,000-node chain dropped to 0.1 seconds, and the yeast assembly step took about 2 minutes. The walk is still recursive and gives the same result.
+What I learned: correct code can still be unusable at scale, and testing on data closer to the real size is necessary before a full run.
 
 # Personal Reflections
 ## Group Leader
 Group leader's reflection on the project
 
-## Other member
-Other members' reflections on the project
+## Other member - Ildiko Polyak
+Marcus described last week's Gibbs sampling project as harder than this one, but I found graph algorithms CONSIDERABLY harder. It took me much longer to be clear on the entire process in order to write a sound pseudocode architecture for the functions. This project required recursion and object-oriented design, which I am still rather new to, and tracing calls that stack up and return in reverse order took several attempts to understand.
+
+The bigger difference was the gap between the algorithm and a working program. In the Gibbs project, the algorithm as described was close to the code that ran. Here, the algorithm worked on the toy example, but running it on 2.4 million real reads required handling both DNA strands, false joins caused by repeats, recursion nearly 9 million calls deep, and code that was correct but too slow. Most of the work on this project was in that gap.
+
+Once I understood the algorithm itself, I was confident in writing the pseudocode, but ultimately used Claude to help work through, understand, and fix those gaps in coding and implementation. In previous projects, I used AI very little, but for this one, I relied on it to help understand how to move from the algorithm to the working program.  This week's project taught me more through my failed code than in previous' weeks successes.
+
+The group was cut in size from 3 to 2 members and we had conflicted schedules for the week that reduced our collaborative efforts.  I think this is a realistic real-world challenge and not necessarily a failure that gives us practice on how to move through a project in future jobs where direct collaboration can be reduced.
 
 # Generative AI Appendix
-As per the syllabus
+Anthropic Claude Opus 5.5 was used for this project and many specific details are described and documented in above sections.
+Pseudocode and original code was written idenpendently and original.  Claude was given the parts of the functions that were not working as anticipated and asked to explain in detail why and what the fix would be in the code.
