@@ -300,6 +300,8 @@ class DeBruijnGraph:
         #close the file
         #Sanity-print check statement:  print the filename and how many contigs were written
 ```
+# Dependencies
+Python and standard libraries
 
 # Results
 ================================================================================
